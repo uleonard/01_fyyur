@@ -11,10 +11,10 @@ from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 import logging
 from logging import Formatter, FileHandler
-from flask_wtf import Form
+#from flask_wtf import Form
 from forms import *
 from flask_migrate import Migrate
-import psycopg2
+from models import db, Venue, Artist, Show
 #----------------------------------------------------------------------------#
 # App Config.
 #----------------------------------------------------------------------------#
@@ -29,58 +29,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Umali2022@localho
 db = SQLAlchemy(app)
 
 migrate = Migrate(app, db)
-
-#----------------------------------------------------------------------------#
-# Models.
-#----------------------------------------------------------------------------#
-
-class Venue(db.Model):
-    __tablename__ = 'Venue'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    address = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))    
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
-    seeking_talents = db.Column(db.String(120))
-    seeking_description = db.Column(db.String(120))
-    website_link = db.Column(db.String(120))
-    genres = db.Column(db.String(120))
-    #shows = db.relationship("Show",backref="venue")
-
-class Artist(db.Model):
-    __tablename__ = 'Artist'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String)
-    city = db.Column(db.String(120))
-    state = db.Column(db.String(120))
-    phone = db.Column(db.String(120))
-    genres = db.Column(db.String(120))
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
-    website_link = db.Column(db.String(120))
-    seeking_venue = db.Column(db.String(2))
-    seeking_description = db.Column(db.String(120))
-   # shows = db.relationship("Show",backref="artist")
-
-# TODO Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
-
-class Show(db.Model):
-    __tablename__ = 'Show'
-
-    id = db.Column(db.Integer, primary_key=True)
-    start_time = db.Column(db.String(120))
-    artist_id = db.Column(db.Integer, db.ForeignKey("Artist.id"))
-    venue_id = db.Column(db.Integer, db.ForeignKey("Venue.id"))
-    artist = db.relationship("Artist",backref="shows")
-    venue = db.relationship("Venue",backref="shows")
 
 
 #----------------------------------------------------------------------------#
@@ -165,26 +113,36 @@ def show_venue(venue_id):
 
   venue = Venue.query.get(venue_id)
 
+  #Please note that I have used join() only for past shows and I have not filtered date directly in the query
+  #I realized that the start_time field was defined as string field and not as date in the Model
+  #So I am filtering inside the loop for both upcoming and past events
+
+  #Looking at the type of queries made, and the relationship defined in the models, I do not see
+  #why joining was necessary for this action, as I see the relation is already doing something greate
+  #as the second loop below for upcoming shows
   past_shows =  []
-  for show in Show.query.filter_by(venue_id=venue_id):
-    past_shows. append( {
-                  "artist_id": show.artist.id,
-                  "artist_name": show.artist.name,
-                  "artist_image_link": show.artist.image_link,
-                  "start_time": show.start_time
-                }
-              )
+  for show in db.session.query(Show).join(Venue).filter(Show.venue_id==venue_id).all():
+    date = dateutil.parser.parse(show.start_time)
+    if date < datetime.now():
+      past_shows. append( {
+                    "artist_id": show.artist.id,
+                    "artist_name": show.artist.name,
+                    "artist_image_link": show.artist.image_link,
+                    "start_time": show.start_time
+                  }
+                )
     
   upcoming_shows =  []
   for show in Show.query.filter_by(venue_id=venue_id):
-    upcoming_shows. append( {
-                  "artist_id": show.artist.id,
-                  "artist_name": show.artist.name,
-                  "artist_image_link": show.artist.image_link,
-                  "start_time": show.start_time
-                }
-              )
-    
+    date = dateutil.parser.parse(show.start_time)
+    if date > datetime.now():
+      upcoming_shows. append( {
+                    "artist_id": show.artist.id,
+                    "artist_name": show.artist.name,
+                    "artist_image_link": show.artist.image_link,
+                    "start_time": show.start_time
+                  }
+                )   
 
   data={
     "id": venue.id,
@@ -227,6 +185,7 @@ def create_venue_submission():
   # TODO: on unsuccessful db insert, flash an error instead.
   # e.g., flash('An error occurred. Venue ' + data.name + ' could not be listed.')
   # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
+
 
   try:
     genres = ""
@@ -320,25 +279,42 @@ def show_artist(artist_id):
     
   artist = Artist.query.get(artist_id)
 
+  
+  #Please note that I have note used join() and I have not filtered date directly in the query
+  #I realized that the start_time field was defined as string field and not as date in the Model
+  #So I am filtering inside the loop for both upcoming and past events.
+  #The line of code below fails.
+
+  #past_shows_query = db.session.query(Show).join(Venue).filter(Show.artist_id==artist_id).filter(datetime.strptime(Show.start_time, '%y-%m-%d %H:%M:%S')<datetime.now()).all() 
+  
+ 
+  
+  past_shows_query = Show.query.filter(Show.artist_id==artist_id).all()
   past_shows =  []
-  for show in Show.query.filter_by(artist_id=artist_id):
-    past_shows. append( {
-                  "venu_id": show.venue.id,
-                  "venue_name": show.venue.name,
-                  "venue_image_link": show.artist.image_link,
-                  "start_time": show.start_time
-                }
-              )
-    
+  for show in past_shows_query:
+    date = dateutil.parser.parse(show.start_time)
+    if date < datetime.now():
+      past_shows. append( {
+                    "venu_id": show.venue.id,
+                    "venue_name": show.venue.name,
+                    "venue_image_link": show.artist.image_link,
+                    "start_time": show.start_time
+                  }
+                )
+      
+  #upcoming_shows_query = Show.query.filter(Show.artist_id==artist_id).filter(Show.start_time>datetime.now()).all()
+  upcoming_shows_query = Show.query.filter(Show.artist_id==artist_id).all()
   upcoming_shows =  []
-  for show in Show.query.filter_by(venue_id=artist_id):
-    upcoming_shows. append( {
-                  "venue_id": show.venue.id,
-                  "venue_name": show.venue.name,
-                  "venue_image_link": show.artist.image_link,
-                  "start_time": show.show_date
-                }
-              )
+  for show in upcoming_shows_query:
+    date = dateutil.parser.parse(show.start_time)
+    if date > datetime.now():
+      upcoming_shows. append( {
+                    "venue_id": show.venue.id,
+                    "venue_name": show.venue.name,
+                    "venue_image_link": show.artist.image_link,
+                    "start_time": show.start_time
+                  }
+                )
   genres = artist.genres.split(',') 
 
   data={
