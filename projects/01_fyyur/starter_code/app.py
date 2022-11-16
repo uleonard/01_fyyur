@@ -80,7 +80,7 @@ def venues():
     
 
   #return data2
-  
+    
   return render_template('pages/venues.html', areas=data2)
 
 @app.route('/venues/search', methods=['POST'])
