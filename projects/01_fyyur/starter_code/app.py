@@ -26,7 +26,7 @@ app.config.from_object('config')
 
 # TODO: connect to a local postgresql database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Umali2022@localhost:5432/fyrr'
-db = SQLAlchemy(app)
+db.init_app(app)
 
 migrate = Migrate(app, db)
 
@@ -191,24 +191,30 @@ def create_venue_submission():
     genres = ""
     for i in request.form.getlist('genres'):
       genres = genres + "," + i
-    venue = Venue(
-            name = request.form['name'],
-            city = request.form['city'],
-            state = request.form['state'],
-            address = request.form['address'],
-            phone = request.form['phone'],
-            genres = genres,
-            image_link = request.form['image_link'],
-            website_link = request.form['website_link'],
-            facebook_link = request.form['facebook_link'],
-            seeking_talents = request.form.get('seeking_talent','n'),
-            seeking_description = request.form.get('seeking_description','')
-    )
-    print(venue)
     
-    db.session.add(venue)
-    db.session.commit()
-    flash('Venue ' + request.form['name'] + ' was successfully listed!')
+    form = VenueForm(request.form)
+    if form.validate_on_submit():
+      venue = Venue(
+              name = request.form['name'],
+              city = request.form['city'],
+              state = request.form['state'],
+              address = request.form['address'],
+              phone = request.form['phone'],
+              genres = genres,
+              image_link = request.form['image_link'],
+              website_link = request.form['website_link'],
+              facebook_link = request.form['facebook_link'],
+              seeking_talents = request.form.get('seeking_talent','n'),
+              seeking_description = request.form.get('seeking_description','')
+      )
+      #print(venue)
+      
+      db.session.add(venue)
+      db.session.commit()
+      flash('Venue ' + request.form['name'] + ' was successfully listed!')
+    else:
+      for field,message in form.errors.items():
+        flash(field + '-' + str(message), 'danger')
   except:
     db.session.rollback()
     flash('An error occured: Venue ' + request.form['name'] + ' could not be listed!')
@@ -426,7 +432,7 @@ def edit_venue_submission(venue_id):
     genres = ""
     for i in request.form.getlist('genres'):
       genres = genres + "," + i
-
+    
     venue = Venue.query.get(venue_id)
     venue.name = request.form['name']
     venue.city = request.form['city']
