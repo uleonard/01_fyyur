@@ -25,10 +25,11 @@ app.config.from_object('config')
 #db = SQLAlchemy(app)
 
 # TODO: connect to a local postgresql database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Umali2022@localhost:5432/fyrr'
+# app.config['SQLALCHEMY_DATABASE_URI']
 db.init_app(app)
 
 migrate = Migrate(app, db)
+
 
 
 #----------------------------------------------------------------------------#
@@ -143,11 +144,19 @@ def show_venue(venue_id):
                     "start_time": show.start_time
                   }
                 )   
+  genres_list = ""
+  i = 0
+  for genre in venue.genres:
+    if(i>0 and i< len(venue.genres)-1):
+      genres_list = genres_list + genre
+    i = i+1
+  genres_list = genres_list.replace('"','').split(',')
 
   data={
     "id": venue.id,
     "name": venue.name,
-    "genres": venue.genres.split(',') ,
+    #"genres": venue.genres.split(',') ,
+    "genres": genres_list,
     "address": venue.address,
     "city": venue.city,
     "state": venue.state,
@@ -186,45 +195,54 @@ def create_venue_submission():
   # e.g., flash('An error occurred. Venue ' + data.name + ' could not be listed.')
   # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
 
+  # Set the FlaskForm
+  form = VenueForm(request.form, meta={'csrf': False})
 
-  try:
-    genres = ""
-    for i in request.form.getlist('genres'):
-      genres = genres + "," + i
-    
-    form = VenueForm(request.form)
-    if form.validate_on_submit():
-      venue = Venue(
+  # Validate all fields
+  if form.validate():
+
+      # Prepare for transaction
+      try:
+          
+          seeking_talents = False
+          if request.form.get('seeking_talent'):
+            seeking_talents = True
+          venue = Venue(
               name = request.form['name'],
               city = request.form['city'],
               state = request.form['state'],
               address = request.form['address'],
               phone = request.form['phone'],
-              genres = genres,
+              genres = request.form.getlist('genres'),
               image_link = request.form['image_link'],
               website_link = request.form['website_link'],
               facebook_link = request.form['facebook_link'],
-              seeking_talents = request.form.get('seeking_talent','n'),
+              seeking_talents = seeking_talents,
               seeking_description = request.form.get('seeking_description','')
-      )
-      #print(venue)
-      
-      db.session.add(venue)
-      db.session.commit()
-      flash('Venue ' + request.form['name'] + ' was successfully listed!')
-    else:
-      for field,message in form.errors.items():
-        flash(field + '-' + str(message), 'danger')
-  except:
-    db.session.rollback()
-    flash('An error occured: Venue ' + request.form['name'] + ' could not be listed!')
-  finally:
-    db.session.close()
+          )
 
+          db.session.add(venue)
+          db.session.commit()
+          flash('Venue ' + request.form['name'] + ' was successfully listed!')
+      except ValueError as e:
+          #print(e)
 
+          flash('An error occured: Venue ' + str(e))
+          db.session.rollback()
+      finally:
+          db.session.close()
 
+  # If there is any invalid field
+  else:
+      message = []
+      for field, err in form.errors.items():
+          message.append(field + ' ' + '|'.join(err))
+      flash('Errors ' + str(message))
+      form = VenueForm()
+      return render_template('forms/new_venue.html', form=form)
   return render_template('pages/home.html')
 
+  
 @app.route('/venues/<venue_id>/delete', methods=['GET'])
 def delete_venue(venue_id):
   # TODO: Complete this endpoint for taking a venue_id, and using
@@ -321,12 +339,18 @@ def show_artist(artist_id):
                     "start_time": show.start_time
                   }
                 )
-  genres = artist.genres.split(',') 
+  genres_list = ""
+  i = 0
+  for genre in artist.genres:
+    if(i>0 and i< len(artist.genres)-1):
+      genres_list = genres_list + genre
+    i = i+1
+  genres_list = genres_list.replace('"','').split(',') 
 
   data={
     "id": artist.id,
     "name": artist.name,
-    "genres": genres,
+    "genres": genres_list,
     "city": artist.city,
     "state": artist.state,
     "phone": artist.phone,
@@ -351,16 +375,25 @@ def show_artist(artist_id):
 def edit_artist(artist_id):
   form = ArtistForm()
   row = Artist.query.get(artist_id)
+
+  genres_list = ""
+  i = 0
+  for genre in row.genres:
+    if(i>0 and i< len(row.genres)-1):
+      genres_list = genres_list + genre
+    i = i+1
+  genres_list = genres_list.replace('"','').split(',')
+
   artist={
     "id": row.id,
     "name": row.name,
-    "genres": row.genres.split(','),
+    "genres": genres_list,
     "city": row.city,
     "state": row.state,
     "phone": row.phone,
     "website": row.website_link,
     "facebook_link": row.facebook_link,
-    "seeking_venue": row.seeking_venue,
+    "seeking_venue": str(row.seeking_venue),
     "seeking_description": row.seeking_description,
     "image_link": row.image_link
   }
@@ -372,41 +405,69 @@ def edit_artist_submission(artist_id):
   # TODO: take values from the form submitted, and update existing
   # artist record with ID <artist_id> using the new attributes
 
-  try:
-   
-    genres = ""
-    for i in request.form.getlist('genres'):
-      genres = genres + "," + i
+# Set the FlaskForm
+  form = ArtistForm(request.form, meta={'csrf': False})
 
-    artist = Artist.query.get(artist_id)
-    artist.name = request.form['name']
-    artist.city = request.form['city']
-    artist.state = request.form['state']
-    artist.phone = request.form['phone']
-    artist.genres = genres
-    artist.image_link = request.form['image_link']
-    artist.facebook_link = request.form['facebook_link']
-    artist.seeking_venue = request.form.get('seeking_venue','n')
-    artist.seeking_description = request.form.get('seeking_description','')
+  # Validate all fields
+  if form.validate():
+
+      # Prepare for transaction
+      try:
+          
+          seeking_venue = False
+          if request.form.get('seeking_venue'):
+            seeking_venue = True
+          
+          artist = Artist.query.get(artist_id)
+          artist.name = request.form['name']
+          artist.city = request.form['city']
+          artist.state = request.form['state']
+          artist.phone = request.form['phone']
+          artist.genres = request.form.getlist('genres')
+          artist.image_link = request.form['image_link']
+          artist.facebook_link = request.form['facebook_link']
+          artist.seeking_venue = seeking_venue
+          artist.seeking_description = request.form.get('seeking_description','')
     
-    db.session.commit()
-  
-  except:
-    db.session.rollback()
-  finally:
-    db.session.close()
+          db.session.commit()
+          flash('Artist ' + request.form['name'] + ' was successfully edited!')
+      except ValueError as e:
+          #print(e)
 
+          flash('An error occured: ' + str(e))
+          db.session.rollback()
+      finally:
+          db.session.close()
 
+  # If there is any invalid field
+  else:
+      message = []
+      for field, err in form.errors.items():
+          message.append(field + ' ' + '|'.join(err))
+      flash('Errors ' + str(message))
+      form = VenueForm()
+      
   return redirect(url_for('show_artist', artist_id=artist_id))
+
+ 
 
 @app.route('/venues/<int:venue_id>/edit', methods=['GET'])
 def edit_venue(venue_id):
   row = Venue.query.get(venue_id)
   form = VenueForm()
+
+  genres_list = ""
+  i = 0
+  for genre in row.genres:
+    if(i>0 and i< len(row.genres)-1):
+      genres_list = genres_list + genre
+    i = i+1
+  genres_list = genres_list.replace('"','').split(',')
+
   venue={
     "id": row.id,
     "name": row.name,
-    "genres": row.genres.split(","),
+    "genres": genres_list,
     "address": row.address,
     "city": row.city,
     "state": row.state,
@@ -427,32 +488,54 @@ def edit_venue_submission(venue_id):
   # TODO: take values from the form submitted, and update existing
   # venue record with ID <venue_id> using the new attributes
 
-  try:
-   
-    genres = ""
-    for i in request.form.getlist('genres'):
-      genres = genres + "," + i
-    
-    venue = Venue.query.get(venue_id)
-    venue.name = request.form['name']
-    venue.city = request.form['city']
-    venue.state = request.form['state']
-    venue.phone = request.form['phone']
-    venue.genres = genres
-    venue.image_link = request.form['image_link']
-    venue.website_link = request.form['website_link']
-    venue.facebook_link = request.form['facebook_link']
-    venue.seeking_venue = request.form.get('seeking_venue','n')
-    venue.seeking_description = request.form.get('seeking_description','')
-    
-    db.session.commit()
-  
-  except:
-    db.session.rollback()
-  finally:
-    db.session.close()
+  # Set the FlaskForm
+  form = VenueForm(request.form, meta={'csrf': False})
 
+  # Validate all fields
+  if form.validate():
+
+      # Prepare for transaction
+      try:
+          
+          seeking_talents = False
+          if request.form.get('seeking_talent'):
+            seeking_talents = True
+          
+          venue = Venue.query.get(venue_id)
+          venue.name = request.form['name']
+          venue.city = request.form['city']
+          venue.state = request.form['state']
+          venue.phone = request.form['phone']
+          venue.genres = request.form.getlist('genres')
+          venue.image_link = request.form['image_link']
+          venue.website_link = request.form['website_link']
+          venue.facebook_link = request.form['facebook_link']
+          venue.seeking_talents = seeking_talents
+          venue.seeking_description = request.form.get('seeking_description','')
+    
+
+          db.session.add(venue)
+          db.session.commit()
+          flash('Venue ' + request.form['name'] + ' was successfully edited!')
+      except ValueError as e:
+          #print(e)
+
+          flash('An error occured: ' + str(e))
+          db.session.rollback()
+      finally:
+          db.session.close()
+
+  # If there is any invalid field
+  else:
+      message = []
+      for field, err in form.errors.items():
+          message.append(field + ' ' + '|'.join(err))
+      flash('Errors ' + str(message))
+      form = VenueForm()
+      
   return redirect(url_for('show_venue', venue_id=venue_id))
+
+
 
 #  Create Artist
 #  ----------------------------------------------------------------
@@ -472,38 +555,53 @@ def create_artist_submission():
   #flash('Artist ' + request.form['name'] + ' was successfully listed!')
   # TODO: on unsuccessful db insert, flash an error instead.
   # e.g., flash('An error occurred. Artist ' + data.name + ' could not be listed.')
+# Set the FlaskForm
+  form = ArtistForm(request.form, meta={'csrf': False})
 
-  try:
-   
-    genres = ""
-    for i in request.form.getlist('genres'):
-      genres = genres + "," + i
+  # Validate all fields
+  if form.validate():
 
-    artist = Artist(
+      # Prepare for transaction
+      try:
+          
+          seeking_venue = False
+          if request.form.get('seeking_venue'):
+            seeking_venue = True
+
+          artist = Artist(
             name = request.form['name'],
             city = request.form['city'],
             state = request.form['state'],
             phone = request.form['phone'],
-            genres = genres,
+            genres = request.form.getlist('genres'),
             image_link = request.form['image_link'],
             website_link = request.form['website_link'],
             facebook_link = request.form['facebook_link'],
-            seeking_venue = request.form.get('seeking_venue','n'),
+            seeking_venue = seeking_venue,
             seeking_description = request.form.get('seeking_description','')
-    )
-    
-    db.session.add(artist)
-    db.session.commit()
-    flash('Artist ' + request.form['name'] + ' was successfully posted!')
-  except:
-    db.session.rollback()
-    flash('An error occured: Artist ' + request.form['name'] + ' could not be posted!')
-  finally:
-    db.session.close()
+          )
 
+          db.session.add(artist)
+          db.session.commit()
+          flash('Artist ' + request.form['name'] + ' was successfully listed!')
+      except ValueError as e:
+          #print(e)
 
-  
+          flash('An error occured: ' + str(e))
+          db.session.rollback()
+      finally:
+          db.session.close()
+
+  # If there is any invalid field
+  else:
+      message = []
+      for field, err in form.errors.items():
+          message.append(field + ' ' + '|'.join(err))
+      flash('Errors ' + str(message))
+      form = ArtistForm()
+      return render_template('forms/new_artist.html', form=form)
   return render_template('pages/home.html')
+
 
 
 #  Shows

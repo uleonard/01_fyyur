@@ -17,10 +17,11 @@ class Venue(db.Model):
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))    
     # TODO: implement any missing fields, as a database migration using Flask-Migrate
-    seeking_talents = db.Column(db.String(120))
+    seeking_talents = db.Column(db.Boolean())
     seeking_description = db.Column(db.String(120))
     website_link = db.Column(db.String(120))
-    genres = db.Column(db.String(120))
+    #genres = db.Column(db.String(120))
+    genres = db.Column(db.ARRAY(db.String), nullable=False)
     #shows = db.relationship("Show",backref="venue")
 
 class Artist(db.Model):
@@ -31,13 +32,14 @@ class Artist(db.Model):
     city = db.Column(db.String(120))
     state = db.Column(db.String(120))
     phone = db.Column(db.String(120))
-    genres = db.Column(db.String(120))
+    #genres = db.Column(db.String(120))
+    genres = db.Column(db.ARRAY(db.String), nullable=False)
     image_link = db.Column(db.String(500))
     facebook_link = db.Column(db.String(120))
 
     # TODO: implement any missing fields, as a database migration using Flask-Migrate
     website_link = db.Column(db.String(120))
-    seeking_venue = db.Column(db.String(2))
+    seeking_venue = db.Column(db.Boolean)
     seeking_description = db.Column(db.String(120))
    # shows = db.relationship("Show",backref="artist")
 
